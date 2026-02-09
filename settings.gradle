@@ -1,0 +1,2 @@
+include ':app', ':quiet'
+project(':quiet').projectDir = new File(settingsDir, '../org.quietmodem.Quiet/quiet')
