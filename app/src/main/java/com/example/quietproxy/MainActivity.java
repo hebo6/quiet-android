@@ -107,8 +107,6 @@ public class MainActivity extends Activity {
 
     private void doStart() {
         startService(new Intent(this, ProxyService.class));
-        serviceRunning = true;
-        updateUI();
     }
 
     private void updateUI() {

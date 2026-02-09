@@ -31,7 +31,7 @@ public class ProxyService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (running) return START_STICKY;
+        if (running) return START_NOT_STICKY;
         running = true;
         acceptThread = new Thread(new Runnable() {
             @Override
@@ -40,7 +40,7 @@ public class ProxyService extends Service {
             }
         }, "proxy-accept");
         acceptThread.start();
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
 
     private void runServer() {
@@ -76,8 +76,10 @@ public class ProxyService extends Service {
                 log("error: " + e.getMessage());
             }
         } finally {
+            running = false;
             cleanup();
             sendStatus(false);
+            stopSelf();
         }
     }
 
