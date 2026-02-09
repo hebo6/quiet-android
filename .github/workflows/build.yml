@@ -15,11 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Checkout quiet library
-        uses: actions/checkout@v4
-        with:
-          repository: hebo6/quiet
-          path: ../org.quietmodem.Quiet
-          submodules: recursive
+        run: git clone --recursive https://github.com/hebo6/quiet.git ../org.quietmodem.Quiet
 
       - name: Set up JDK 8
         uses: actions/setup-java@v4
