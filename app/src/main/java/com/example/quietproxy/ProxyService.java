@@ -24,6 +24,8 @@ public class ProxyService extends Service {
     private static final String GATEWAY = "192.168.0.1";
     private static final int PORT = 1080;
 
+    private static final int SAMPLE_RATE = 44100;
+
     private volatile boolean running;
     private NetworkInterface networkInterface;
     private ServerSocket serverSocket;
@@ -47,8 +49,10 @@ public class ProxyService extends Service {
         try {
             FrameTransmitterConfig txConf =
                 new FrameTransmitterConfig(this, PROFILE);
+            txConf.setSampleRate(SAMPLE_RATE);
             FrameReceiverConfig rxConf =
                 new FrameReceiverConfig(this, PROFILE);
+            rxConf.setSampleRate(SAMPLE_RATE);
 
             NetworkInterfaceConfig netConf = new NetworkInterfaceConfig(
                 rxConf, txConf,
