@@ -147,25 +147,6 @@ jobs:
           }' "$QUIET_ENC"
           # Also add -llog to quiet library
           sed -i 's/set(CORE_DEPENDENCIES liquid jansson m)/set(CORE_DEPENDENCIES liquid jansson m log)/' /tmp/quiet/CMakeLists.txt
-          # 7. Add audio input level monitoring to opensl.c record_callback
-          OPENSL=../org.quietmodem.Quiet/quiet/src/main/jni/opensl.c
-          # Create header with includes and helper function
-          cat > /tmp/_audio_monitor.h << 'AUDIOMONITOR'
-          #include <android/log.h>
-          #include <math.h>
-          #define ALOG(...) __android_log_print(ANDROID_LOG_DEBUG, "quiet-audio", __VA_ARGS__)
-          static void _log_audio_level(const float *buf, size_t n, int count) {
-              float mx = 0.0f, sm = 0.0f;
-              for (size_t i = 0; i < n; i++) { float a = fabsf(buf[i]); if (a > mx) mx = a; sm += a; }
-              ALOG("record_cb #%d: frames=%zu max=%.4f avg=%.6f", count, n, mx, n > 0 ? sm / n : 0.0f);
-          }
-          AUDIOMONITOR
-          # Prepend to opensl.c
-          cat /tmp/_audio_monitor.h "$OPENSL" > /tmp/_opensl_patched.c && mv /tmp/_opensl_patched.c "$OPENSL"
-          # Add counter after consumer cast line
-          sed -i '/quiet_opensl_consumer \*c = (quiet_opensl_consumer/a\    static int _rcb = 0; _rcb++;' "$OPENSL"
-          # Add logging call after consume (single-line if, no brace conflicts)
-          sed -i '/c->consume(c->consume_arg, c->scratch, c->num_frames);/a\    if (_rcb % 100 == 1) _log_audio_level(c->scratch, c->num_frames, _rcb);' "$OPENSL"
 
       - name: Cross-compile native libraries
         run: |
