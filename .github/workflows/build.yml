@@ -147,6 +147,12 @@ jobs:
           }' "$QUIET_ENC"
           # Also add -llog to quiet library
           sed -i 's/set(CORE_DEPENDENCIES liquid jansson m)/set(CORE_DEPENDENCIES liquid jansson m log)/' /tmp/quiet/CMakeLists.txt
+          # 7. Add audio input level monitoring to opensl.c record_callback
+          OPENSL=../org.quietmodem.Quiet/quiet/src/main/jni/opensl.c
+          sed -i '1i #include <android/log.h>\n#include <math.h>\n#define ALOG(...) __android_log_print(ANDROID_LOG_DEBUG, "quiet-audio", __VA_ARGS__)' "$OPENSL"
+          sed -i '/void record_callback/,/^}/ {
+            /c->consume(c->consume_arg/a\    { static int _cb_count = 0; _cb_count++; if (_cb_count % 100 == 1) { float _max = 0.0f, _sum = 0.0f; for (size_t _i = 0; _i < c->num_frames; _i++) { float _a = fabsf(c->scratch[_i]); if (_a > _max) _max = _a; _sum += _a; } ALOG("record_cb #%d: frames=%zu max=%.4f avg=%.6f", _cb_count, c->num_frames, _max, _sum / c->num_frames); } }
+          }' "$OPENSL"
 
       - name: Cross-compile native libraries
         run: |
