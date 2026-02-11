@@ -251,19 +251,29 @@ jobs:
           ./gradlew :app:assembleRelease -x lint -x lintVitalRelease
 
       - name: Sign APK
-        uses: r0adkll/sign-android-release@v1
-        id: sign_app
-        with:
-          releaseDirectory: app/build/outputs/apk
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
-        env:
-          BUILD_TOOLS_VERSION: "34.0.0"
+        run: |
+          BUILD_TOOLS=$ANDROID_HOME/build-tools/34.0.0
+          APK_IN=app/build/outputs/apk/app-release-unsigned.apk
+          APK_ALIGNED=/tmp/app-release-aligned.apk
+          APK_SIGNED=/tmp/app-release-signed.apk
+          KEYSTORE=/tmp/release.jks
+          # Decode keystore from secret
+          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > $KEYSTORE
+          # Align
+          $BUILD_TOOLS/zipalign -v -p 4 $APK_IN $APK_ALIGNED
+          # Sign
+          $BUILD_TOOLS/apksigner sign \
+            --ks $KEYSTORE \
+            --ks-key-alias ${{ secrets.ALIAS }} \
+            --ks-pass pass:${{ secrets.KEY_STORE_PASSWORD }} \
+            --key-pass pass:${{ secrets.KEY_PASSWORD }} \
+            --out $APK_SIGNED \
+            $APK_ALIGNED
+          # Verify
+          $BUILD_TOOLS/apksigner verify --verbose $APK_SIGNED
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: quiet-android-release-apk
-          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          path: /tmp/app-release-signed.apk
