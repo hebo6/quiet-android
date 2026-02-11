@@ -63,6 +63,8 @@ jobs:
           sed -i '/set(CMAKE_EXE_LINKER_FLAGS/d' /tmp/quiet-lwip/CMakeLists.txt
           # quiet-lwip: remove pthread (Android bionic includes it in libc)
           sed -i 's/set(CORE_DEPENDENCIES quiet pthread)/set(CORE_DEPENDENCIES quiet)/' /tmp/quiet-lwip/CMakeLists.txt
+          # JNI Android.mk: add SOCKLEN_T_DEFINED to avoid socklen_t redefinition
+          sed -i 's/LOCAL_CFLAGS := /LOCAL_CFLAGS := -DSOCKLEN_T_DEFINED /' ../org.quietmodem.Quiet/quiet/src/main/jni/Android.mk
 
       - name: Cross-compile native libraries
         run: |
