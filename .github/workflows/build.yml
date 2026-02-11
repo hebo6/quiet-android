@@ -63,6 +63,8 @@ jobs:
           sed -i '/set(CMAKE_EXE_LINKER_FLAGS/d' /tmp/quiet-lwip/CMakeLists.txt
           # quiet-lwip: remove pthread (Android bionic includes it in libc)
           sed -i 's/set(CORE_DEPENDENCIES quiet pthread)/set(CORE_DEPENDENCIES quiet)/' /tmp/quiet-lwip/CMakeLists.txt
+          # quiet-lwip: add -llog for __android_log_print debug logging
+          sed -i 's/target_link_libraries(quiet_lwip ${CORE_DEPENDENCIES})/target_link_libraries(quiet_lwip ${CORE_DEPENDENCIES} log)/' /tmp/quiet-lwip/CMakeLists.txt
           # JNI Android.mk: add SOCKLEN_T_DEFINED to avoid socklen_t redefinition
           sed -i 's/LOCAL_CFLAGS := /LOCAL_CFLAGS := -DSOCKLEN_T_DEFINED -DLWIP_DNS=1 -DLWIP_AUTOIP=1 /' ../org.quietmodem.Quiet/quiet/src/main/jni/Android.mk
           # JNI Application.mk: set APP_STL to none (pure C code, no C++ runtime needed)
@@ -72,6 +74,20 @@ jobs:
           # 1. Rename existing static quiet_lwip_init to quiet_lwip_netif_init (avoid name conflict)
           sed -i 's/static err_t quiet_lwip_init/static err_t quiet_lwip_netif_init/' /tmp/quiet-lwip/src/driver.c
           sed -i 's/conf, quiet_lwip_init,/conf, quiet_lwip_netif_init,/' /tmp/quiet-lwip/src/driver.c
+          # 1b. Add debug logging to quiet_lwip_netif_init (encoder/decoder creation)
+          sed -i '1i #include <android/log.h>\n#define QLOG(...) __android_log_print(ANDROID_LOG_DEBUG, "quiet-native", __VA_ARGS__)' /tmp/quiet-lwip/src/driver.c
+          sed -i '/static err_t quiet_lwip_netif_init(struct netif \*netif) {/a\    QLOG("quiet_lwip_netif_init: enter");' /tmp/quiet-lwip/src/driver.c
+          sed -i '/quiet_encoder *e = quiet_encoder_create/i\    QLOG("quiet_lwip_netif_init: creating encoder");' /tmp/quiet-lwip/src/driver.c
+          sed -i '/quiet_decoder *d = quiet_decoder_create/i\    QLOG("quiet_lwip_netif_init: encoder created=%p, creating decoder", (void*)e);' /tmp/quiet-lwip/src/driver.c
+          sed -i '/netif->state = driver;/i\    QLOG("quiet_lwip_netif_init: decoder created=%p", (void*)d);' /tmp/quiet-lwip/src/driver.c
+          sed -i '/return ERR_OK;/i\    QLOG("quiet_lwip_netif_init: done");' /tmp/quiet-lwip/src/driver.c
+          # 1c. Add debug logging to quiet_lwip_create
+          sed -i '/quiet_lwip_interface \*quiet_lwip_create/,/^}/ {
+            /quiet_lwip_interface \*interface = malloc/a\    QLOG("quiet_lwip_create: allocated interface=%p", (void*)interface);
+            /netif_add(interface/i\    QLOG("quiet_lwip_create: calling netif_add");
+            /netif_set_up(interface)/i\    QLOG("quiet_lwip_create: netif_add done, calling netif_set_up");
+            /return interface;/i\    QLOG("quiet_lwip_create: done");
+          }' /tmp/quiet-lwip/src/driver.c
           # 2. Append new functions at end of driver.c
           cat >> /tmp/quiet-lwip/src/driver.c << 'PATCH'
 
@@ -79,10 +95,14 @@ jobs:
           #include <stdbool.h>
           static bool _quiet_lwip_initialized = false;
           void quiet_lwip_init() {
+              QLOG("quiet_lwip_init: enter");
               if (!_quiet_lwip_initialized) {
+                  QLOG("quiet_lwip_init: calling tcpip_init");
                   tcpip_init(NULL, NULL);
                   _quiet_lwip_initialized = true;
+                  QLOG("quiet_lwip_init: tcpip_init done");
               }
+              QLOG("quiet_lwip_init: exit");
           }
           void quiet_lwip_close(quiet_lwip_interface *interface) {
               netif_set_down(interface);
@@ -99,6 +119,34 @@ jobs:
           # 3. Remove the inline tcpip_init in quiet_lwip_create (quiet_lwip_init handles it now)
           sed -i '/static bool has_lwip_init/d' /tmp/quiet-lwip/src/driver.c
           sed -i '/if (!has_lwip_init)/,/}/d' /tmp/quiet-lwip/src/driver.c
+          # 4. Add debug logging to JNI network_interface.c (lwip_android_create)
+          JNI_NI=../org.quietmodem.Quiet/quiet/src/main/jni/network_interface.c
+          sed -i '1i #include <android/log.h>\n#define NILOG(...) __android_log_print(ANDROID_LOG_DEBUG, "quiet-jni", __VA_ARGS__)' "$JNI_NI"
+          sed -i '/quiet_lwip_android \*e = malloc/a\    NILOG("lwip_android_create: enter, is_loopback=%d", is_loopback);' "$JNI_NI"
+          sed -i '/e->interface = quiet_lwip_create/a\    NILOG("lwip_android_create: quiet_lwip_create returned %p", (void*)e->interface);' "$JNI_NI"
+          sed -i '/e->producer = opensl_producer_create/i\    NILOG("lwip_android_create: creating opensl producer");' "$JNI_NI"
+          sed -i '/e->consumer = opensl_consumer_create/i\    NILOG("lwip_android_create: creating opensl consumer");' "$JNI_NI"
+          sed -i '/SLresult res = quiet_opensl_create_player/i\        NILOG("lwip_android_create: creating opensl player");' "$JNI_NI"
+          sed -i '/res = quiet_opensl_create_recorder/i\        NILOG("lwip_android_create: player created, creating opensl recorder");' "$JNI_NI"
+          sed -i '/return e;$/i\    NILOG("lwip_android_create: all done, returning");' "$JNI_NI"
+          # 5. Add debug logging to nativeOpen
+          sed -i '/l = lwip_android_create/i\    NILOG("nativeOpen: calling lwip_android_create");' "$JNI_NI"
+          sed -i '/return jvm_opaque_pointer(l);/i\    NILOG("nativeOpen: lwip_android_create returned %p", (void*)l);' "$JNI_NI"
+          # 6. Add debug logging to quiet encoder/decoder creation
+          QUIET_ENC=/tmp/quiet/src/encoder.c
+          sed -i '1i #include <android/log.h>\n#define ELOG(...) __android_log_print(ANDROID_LOG_DEBUG, "quiet-enc", __VA_ARGS__)' "$QUIET_ENC"
+          sed -i '/encoder \*quiet_encoder_create/,/^}/ {
+            /encoder \*e = malloc/a\    ELOG("quiet_encoder_create: encoding=%d sample_rate=%f", opt->encoding, sample_rate);
+            /encoder_ofdm_create/i\        ELOG("quiet_encoder_create: ofdm path");
+            /encoder_modem_create/i\        ELOG("quiet_encoder_create: modem path");
+            /encoder_gmsk_create/i\        ELOG("quiet_encoder_create: gmsk path");
+            /e->mod = modulator_create/i\    ELOG("quiet_encoder_create: frame created, creating modulator");
+            /e->resampler = resamp_rrrf_create/i\        ELOG("quiet_encoder_create: creating resampler rate=%f", rate);
+            /e->buf = ring_create/i\    ELOG("quiet_encoder_create: modulator done, creating ring buffer");
+            /return e;$/i\    ELOG("quiet_encoder_create: done");
+          }' "$QUIET_ENC"
+          # Also add -llog to quiet library
+          sed -i 's/set(CORE_DEPENDENCIES liquid jansson m)/set(CORE_DEPENDENCIES liquid jansson m log)/' /tmp/quiet/CMakeLists.txt
 
       - name: Cross-compile native libraries
         run: |
