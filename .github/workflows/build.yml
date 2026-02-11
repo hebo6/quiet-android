@@ -64,7 +64,7 @@ jobs:
           # quiet-lwip: remove pthread (Android bionic includes it in libc)
           sed -i 's/set(CORE_DEPENDENCIES quiet pthread)/set(CORE_DEPENDENCIES quiet)/' /tmp/quiet-lwip/CMakeLists.txt
           # JNI Android.mk: add SOCKLEN_T_DEFINED to avoid socklen_t redefinition
-          sed -i 's/LOCAL_CFLAGS := /LOCAL_CFLAGS := -DSOCKLEN_T_DEFINED /' ../org.quietmodem.Quiet/quiet/src/main/jni/Android.mk
+          sed -i 's/LOCAL_CFLAGS := /LOCAL_CFLAGS := -DSOCKLEN_T_DEFINED -DLWIP_DNS=1 /' ../org.quietmodem.Quiet/quiet/src/main/jni/Android.mk
 
       - name: Cross-compile native libraries
         run: |
@@ -134,7 +134,7 @@ jobs:
             # 5. quiet-lwip -> libquiet_lwip.so
             rm -rf /tmp/build-lwip-$ABI && mkdir /tmp/build-lwip-$ABI
             cmake -S /tmp/quiet-lwip -B /tmp/build-lwip-$ABI $CMAKE_COMMON \
-              -DCMAKE_C_FLAGS="-std=c11 -O2 -fPIC -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700 -DSOCKLEN_T_DEFINED -Wpedantic -Wall -I$PREFIX/include" \
+              -DCMAKE_C_FLAGS="-std=c11 -O2 -fPIC -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700 -DSOCKLEN_T_DEFINED -DLWIP_DNS=1 -Wpedantic -Wall -I$PREFIX/include" \
               -DCMAKE_SHARED_LINKER_FLAGS="-L$PREFIX/lib"
             make -C /tmp/build-lwip-$ABI -j$(nproc)
             # quiet-lwip has no install target; copy manually
