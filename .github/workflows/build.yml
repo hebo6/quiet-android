@@ -49,6 +49,11 @@ jobs:
         run: |
           # liquid-dsp: fix autoscript target expression for cross-compile
           sed -i 's|\$<TARGET_FILE:autoscript>|${CMAKE_CURRENT_BINARY_DIR}/autoscript|g' /tmp/liquid-dsp/CMakeLists.txt
+          # liquid-dsp: check complex math functions in libcomplex (Android API 21 lacks them in libm)
+          sed -i 's/CHECK_REQUIRED_FUNCTION(cargf m/CHECK_REQUIRED_FUNCTION(cargf complex/' /tmp/liquid-dsp/CMakeLists.txt
+          sed -i 's/CHECK_REQUIRED_FUNCTION(cexpf m/CHECK_REQUIRED_FUNCTION(cexpf complex/' /tmp/liquid-dsp/CMakeLists.txt
+          sed -i 's/CHECK_REQUIRED_FUNCTION(crealf m/CHECK_REQUIRED_FUNCTION(crealf complex/' /tmp/liquid-dsp/CMakeLists.txt
+          sed -i 's/CHECK_REQUIRED_FUNCTION(cimagf m/CHECK_REQUIRED_FUNCTION(cimagf complex/' /tmp/liquid-dsp/CMakeLists.txt
           # quiet-lwip: build SHARED instead of STATIC, remove sanitizer flags
           sed -i 's/add_library(quiet_lwip STATIC/add_library(quiet_lwip SHARED/' /tmp/quiet-lwip/CMakeLists.txt
           sed -i 's/-fsanitize=address//g' /tmp/quiet-lwip/CMakeLists.txt
@@ -87,6 +92,11 @@ jobs:
             make -C /tmp/build-jansson-$ABI -j$(nproc)
             make -C /tmp/build-jansson-$ABI install
 
+            # Pre-install libcomplex (provides cargf etc. missing from Android API 21)
+            mkdir -p $PREFIX/lib $PREFIX/include
+            cp $JNI_BASE/lib/$ABI/libcomplex.so $PREFIX/lib/
+            cp $JNI_BASE/include/$ABI/complex.h $PREFIX/include/
+
             # 3. liquid-dsp -> libliquid.so
             rm -rf /tmp/build-liquid-$ABI && mkdir /tmp/build-liquid-$ABI
             LIQUID_EXTRA=""
@@ -99,6 +109,7 @@ jobs:
               -DHOST_C_COMPILER=gcc \
               -DLIQUID_BUILD_EXAMPLES=OFF \
               -DLIQUID_BUILD_SANDBOX=OFF \
+              -DCMAKE_SHARED_LINKER_FLAGS="-lcomplex" \
               $LIQUID_EXTRA
             make -C /tmp/build-liquid-$ABI -j$(nproc)
             make -C /tmp/build-liquid-$ABI install
@@ -127,7 +138,6 @@ jobs:
             cp $PREFIX/lib/libjansson.so $JNI_LIB/
             cp $PREFIX/lib/libcorrect.so $JNI_LIB/
             cp $PREFIX/lib/libfec.so $JNI_LIB/
-            rm -f $JNI_LIB/libcomplex.so
 
             # Update headers
             INC=$JNI_BASE/include/$ABI
@@ -141,23 +151,7 @@ jobs:
             cp /tmp/quiet-lwip/include/quiet-lwip.h $INC/quiet-lwip/
             cp /tmp/quiet-lwip/include/lwip-socket.h $INC/quiet-lwip/
             cp -r /tmp/quiet-lwip/include/lwip $INC/quiet-lwip/lwip
-            rm -f $INC/complex.h
           done
-
-      - name: Patch Android.mk to remove libcomplex dependency
-        run: |
-          python3 << 'PYEOF'
-          import re
-          mk = "../org.quietmodem.Quiet/quiet/src/main/jni/Android.mk"
-          with open(mk) as f:
-              content = f.read()
-          content = re.sub(
-              r'include \$\(CLEAR_VARS\)\nLOCAL_MODULE := complex-prebuilt\n[^\n]*\ninclude \$\(PREBUILT_SHARED_LIBRARY\)\n*',
-              '', content)
-          content = content.replace(' complex-prebuilt', '')
-          with open(mk, 'w') as f:
-              f.write(content)
-          PYEOF
 
       - name: Build with Gradle
         run: |
