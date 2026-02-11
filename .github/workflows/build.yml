@@ -17,12 +17,22 @@ jobs:
       - name: Checkout quiet library
         run: git clone --recursive https://github.com/hebo6/org.quietmodem.Quiet.git ../org.quietmodem.Quiet
 
+      - name: Checkout native sources
+        run: |
+          git clone https://github.com/quiet/libcorrect.git /tmp/libcorrect
+          git clone https://github.com/akheron/jansson.git /tmp/jansson
+          git clone --branch devel https://github.com/quiet/liquid-dsp.git /tmp/liquid-dsp
+          git clone https://github.com/hebo6/quiet.git /tmp/quiet
+          git clone https://github.com/hebo6/quiet-lwip.git /tmp/quiet-lwip
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK components
-        run: |
-          sdkmanager "platforms;android-23" "build-tools;26.0.2"
+        run: sdkmanager "platforms;android-23" "build-tools;26.0.2"
 
       - name: Install NDK
         run: |
@@ -34,6 +44,120 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '8'
+
+      - name: Patch source trees for cross-compilation
+        run: |
+          # liquid-dsp: fix autoscript target expression for cross-compile
+          sed -i 's|\$<TARGET_FILE:autoscript>|${CMAKE_CURRENT_BINARY_DIR}/autoscript|g' /tmp/liquid-dsp/CMakeLists.txt
+          # quiet-lwip: build SHARED instead of STATIC, remove sanitizer flags
+          sed -i 's/add_library(quiet_lwip STATIC/add_library(quiet_lwip SHARED/' /tmp/quiet-lwip/CMakeLists.txt
+          sed -i 's/-fsanitize=address//g' /tmp/quiet-lwip/CMakeLists.txt
+
+      - name: Cross-compile native libraries
+        run: |
+          set -e
+          NDK=$ANDROID_HOME/ndk/21.4.7075529
+          TOOLCHAIN=$NDK/build/cmake/android.toolchain.cmake
+          JNI_BASE=$(cd ../org.quietmodem.Quiet/quiet/src/main/jni && pwd)
+          ABIS="armeabi-v7a arm64-v8a x86 x86_64"
+
+          for ABI in $ABIS; do
+            echo "========== Building for $ABI =========="
+            PREFIX=/tmp/install/$ABI
+            mkdir -p $PREFIX
+
+            CMAKE_COMMON="-DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN \
+              -DANDROID_ABI=$ABI \
+              -DANDROID_PLATFORM=android-21 \
+              -DCMAKE_INSTALL_PREFIX=$PREFIX \
+              -DCMAKE_FIND_ROOT_PATH=$PREFIX \
+              -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH \
+              -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH"
+
+            # 1. libcorrect -> libcorrect.so + libfec.so
+            rm -rf /tmp/build-correct-$ABI && mkdir /tmp/build-correct-$ABI
+            cmake -S /tmp/libcorrect -B /tmp/build-correct-$ABI $CMAKE_COMMON -DCMAKE_C_FLAGS="-fPIC"
+            make -C /tmp/build-correct-$ABI -j$(nproc)
+            make -C /tmp/build-correct-$ABI shim
+            make -C /tmp/build-correct-$ABI install
+
+            # 2. jansson -> libjansson.so
+            rm -rf /tmp/build-jansson-$ABI && mkdir /tmp/build-jansson-$ABI
+            cmake -S /tmp/jansson -B /tmp/build-jansson-$ABI $CMAKE_COMMON -DJANSSON_BUILD_DOCS=OFF -DJANSSON_EXAMPLES=OFF
+            make -C /tmp/build-jansson-$ABI -j$(nproc)
+            make -C /tmp/build-jansson-$ABI install
+
+            # 3. liquid-dsp -> libliquid.so
+            rm -rf /tmp/build-liquid-$ABI && mkdir /tmp/build-liquid-$ABI
+            LIQUID_EXTRA=""
+            case $ABI in
+              arm64-v8a) LIQUID_EXTRA="-DLIQUID_FORCE_ARM64_NEON=ON" ;;
+              armeabi-v7a) LIQUID_EXTRA="-DLIQUID_FORCE_ARM_NEON=ON" ;;
+              *) LIQUID_EXTRA="-DLIQUID_SIMDOVERRIDE=ON" ;;
+            esac
+            cmake -S /tmp/liquid-dsp -B /tmp/build-liquid-$ABI $CMAKE_COMMON \
+              -DHOST_C_COMPILER=gcc \
+              -DLIQUID_BUILD_EXAMPLES=OFF \
+              -DLIQUID_BUILD_SANDBOX=OFF \
+              $LIQUID_EXTRA
+            make -C /tmp/build-liquid-$ABI -j$(nproc)
+            make -C /tmp/build-liquid-$ABI install
+
+            # 4. quiet -> libquiet.so
+            rm -rf /tmp/build-quiet-$ABI && mkdir /tmp/build-quiet-$ABI
+            cmake -S /tmp/quiet -B /tmp/build-quiet-$ABI $CMAKE_COMMON \
+              -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+              -DCMAKE_C_FLAGS="-D_DEFAULT_SOURCE"
+            make -C /tmp/build-quiet-$ABI -j$(nproc)
+            make -C /tmp/build-quiet-$ABI install
+
+            # 5. quiet-lwip -> libquiet_lwip.so
+            rm -rf /tmp/build-lwip-$ABI && mkdir /tmp/build-lwip-$ABI
+            cmake -S /tmp/quiet-lwip -B /tmp/build-lwip-$ABI $CMAKE_COMMON \
+              -DCMAKE_C_FLAGS="-std=c11 -O2 -fPIC -D_DEFAULT_SOURCE"
+            make -C /tmp/build-lwip-$ABI -j$(nproc)
+            make -C /tmp/build-lwip-$ABI install
+
+            # Copy .so files to JNI prebuilt directory
+            JNI_LIB=$JNI_BASE/lib/$ABI
+            mkdir -p $JNI_LIB
+            cp $PREFIX/lib/libliquid.so $JNI_LIB/
+            cp $PREFIX/lib/libquiet.so $JNI_LIB/
+            cp $PREFIX/lib/libquiet_lwip.so $JNI_LIB/
+            cp $PREFIX/lib/libjansson.so $JNI_LIB/
+            cp $PREFIX/lib/libcorrect.so $JNI_LIB/
+            cp $PREFIX/lib/libfec.so $JNI_LIB/
+            rm -f $JNI_LIB/libcomplex.so
+
+            # Update headers
+            INC=$JNI_BASE/include/$ABI
+            mkdir -p $INC/liquid
+            cp $PREFIX/include/liquid/liquid.h $INC/liquid/
+            cp $PREFIX/include/quiet.h $INC/
+            cp $PREFIX/include/jansson.h $INC/
+            cp $PREFIX/include/jansson_config.h $INC/
+            cp $PREFIX/include/fec.h $INC/
+            rm -rf $INC/quiet-lwip && mkdir -p $INC/quiet-lwip
+            cp /tmp/quiet-lwip/include/quiet-lwip.h $INC/quiet-lwip/
+            cp /tmp/quiet-lwip/include/lwip-socket.h $INC/quiet-lwip/
+            cp -r /tmp/quiet-lwip/include/lwip $INC/quiet-lwip/lwip
+            rm -f $INC/complex.h
+          done
+
+      - name: Patch Android.mk to remove libcomplex dependency
+        run: |
+          python3 << 'PYEOF'
+          import re
+          mk = "../org.quietmodem.Quiet/quiet/src/main/jni/Android.mk"
+          with open(mk) as f:
+              content = f.read()
+          content = re.sub(
+              r'include \$\(CLEAR_VARS\)\nLOCAL_MODULE := complex-prebuilt\n[^\n]*\ninclude \$\(PREBUILT_SHARED_LIBRARY\)\n*',
+              '', content)
+          content = content.replace(' complex-prebuilt', '')
+          with open(mk, 'w') as f:
+              f.write(content)
+          PYEOF
 
       - name: Build with Gradle
         run: |
