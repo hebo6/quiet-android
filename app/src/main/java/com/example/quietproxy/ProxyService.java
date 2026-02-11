@@ -24,7 +24,7 @@ public class ProxyService extends Service {
     private static final String GATEWAY = "192.168.0.1";
     private static final int PORT = 1080;
 
-    private static final int SAMPLE_RATE = 44100;
+    private static final int SAMPLE_RATE = 48000;
 
     private volatile boolean running;
     private NetworkInterface networkInterface;
