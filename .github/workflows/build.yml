@@ -157,7 +157,7 @@ jobs:
             cp $PREFIX/include/fec.h $INC/
             rm -rf $INC/quiet-lwip && mkdir -p $INC/quiet-lwip
             cp /tmp/quiet-lwip/include/quiet-lwip.h $INC/quiet-lwip/
-            cp /tmp/quiet-lwip/include/lwip-socket.h $INC/quiet-lwip/
+            cp /tmp/quiet-lwip/include/quiet-lwip/lwip-socket.h $INC/quiet-lwip/
             cp -r /tmp/quiet-lwip/include/lwip $INC/quiet-lwip/lwip
           done
 
