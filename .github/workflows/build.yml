@@ -64,7 +64,35 @@ jobs:
           # quiet-lwip: remove pthread (Android bionic includes it in libc)
           sed -i 's/set(CORE_DEPENDENCIES quiet pthread)/set(CORE_DEPENDENCIES quiet)/' /tmp/quiet-lwip/CMakeLists.txt
           # JNI Android.mk: add SOCKLEN_T_DEFINED to avoid socklen_t redefinition
-          sed -i 's/LOCAL_CFLAGS := /LOCAL_CFLAGS := -DSOCKLEN_T_DEFINED -DLWIP_DNS=1 /' ../org.quietmodem.Quiet/quiet/src/main/jni/Android.mk
+          sed -i 's/LOCAL_CFLAGS := /LOCAL_CFLAGS := -DSOCKLEN_T_DEFINED -DLWIP_DNS=1 -DLWIP_AUTOIP=1 /' ../org.quietmodem.Quiet/quiet/src/main/jni/Android.mk
+          # quiet-lwip: add missing functions expected by JNI code
+          cat >> /tmp/quiet-lwip/src/driver.c << 'PATCH'
+
+          #include "lwip/autoip.h"
+          static bool _quiet_lwip_initialized = false;
+          void quiet_lwip_init() {
+              if (!_quiet_lwip_initialized) {
+                  tcpip_init(NULL, NULL);
+                  _quiet_lwip_initialized = true;
+              }
+          }
+          void quiet_lwip_close(quiet_lwip_interface *interface) {
+              netif_set_down(interface);
+              netif_remove(interface);
+          }
+          quiet_lwip_interface *quiet_lwip_autoip(quiet_lwip_interface *interface) {
+              autoip_start(interface);
+              return interface;
+          }
+          void quiet_lwip_start_threads(quiet_lwip_interface *interface) {
+              (void)interface;
+          }
+          PATCH
+          # Update quiet_lwip_create to use the shared init flag
+          sed -i 's/static bool has_lwip_init = false;/_quiet_lwip_initialized = true;/' /tmp/quiet-lwip/src/driver.c
+          sed -i '/if (!has_lwip_init)/,/}/d' /tmp/quiet-lwip/src/driver.c
+          # Don't overwrite JNI quiet-lwip.h (it has extra function declarations)
+          sed -i 's|cp /tmp/quiet-lwip/include/quiet-lwip.h|# skip: keep JNI header|' /dev/null 2>/dev/null || true
 
       - name: Cross-compile native libraries
         run: |
@@ -134,7 +162,7 @@ jobs:
             # 5. quiet-lwip -> libquiet_lwip.so
             rm -rf /tmp/build-lwip-$ABI && mkdir /tmp/build-lwip-$ABI
             cmake -S /tmp/quiet-lwip -B /tmp/build-lwip-$ABI $CMAKE_COMMON \
-              -DCMAKE_C_FLAGS="-std=c11 -O2 -fPIC -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700 -DSOCKLEN_T_DEFINED -DLWIP_DNS=1 -Wpedantic -Wall -I$PREFIX/include" \
+              -DCMAKE_C_FLAGS="-std=c11 -O2 -fPIC -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700 -DSOCKLEN_T_DEFINED -DLWIP_DNS=1 -DLWIP_AUTOIP=1 -Wpedantic -Wall -I$PREFIX/include" \
               -DCMAKE_SHARED_LINKER_FLAGS="-L$PREFIX/lib"
             make -C /tmp/build-lwip-$ABI -j$(nproc)
             # quiet-lwip has no install target; copy manually
@@ -150,7 +178,7 @@ jobs:
             cp $PREFIX/lib/libcorrect.so $JNI_LIB/
             cp $PREFIX/lib/libfec.so $JNI_LIB/
 
-            # Update headers
+            # Update headers (keep existing quiet-lwip.h which has extra JNI function declarations)
             INC=$JNI_BASE/include/$ABI
             mkdir -p $INC/liquid
             cp $PREFIX/include/liquid/liquid.h $INC/liquid/
@@ -158,8 +186,7 @@ jobs:
             cp $PREFIX/include/jansson.h $INC/
             cp $PREFIX/include/jansson_config.h $INC/
             cp $PREFIX/include/fec.h $INC/
-            rm -rf $INC/quiet-lwip && mkdir -p $INC/quiet-lwip
-            cp /tmp/quiet-lwip/include/quiet-lwip.h $INC/quiet-lwip/
+            mkdir -p $INC/quiet-lwip
             cp /tmp/quiet-lwip/include/quiet-lwip/lwip-socket.h $INC/quiet-lwip/
             cp -r /tmp/quiet-lwip/include/lwip $INC/quiet-lwip/lwip
           done
