@@ -35,6 +35,7 @@ public class ProxyService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (running) return START_NOT_STICKY;
         running = true;
+        log("service starting...");
         acceptThread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -47,30 +48,27 @@ public class ProxyService extends Service {
 
     private void runServer() {
         try {
-            Log.d(TAG, "runServer: creating txConf");
+            log("initializing audio modem (profile: " + PROFILE + ")");
             FrameTransmitterConfig txConf =
                 new FrameTransmitterConfig(this, PROFILE);
             txConf.setSampleRate(SAMPLE_RATE);
-            Log.d(TAG, "runServer: creating rxConf");
             FrameReceiverConfig rxConf =
                 new FrameReceiverConfig(this, PROFILE);
             rxConf.setSampleRate(SAMPLE_RATE);
 
-            Log.d(TAG, "runServer: creating netConf");
+            log("creating network interface...");
             NetworkInterfaceConfig netConf = new NetworkInterfaceConfig(
                 rxConf, txConf,
                 InetAddress.getByName(LOCAL_IP),
                 InetAddress.getByName(NETMASK),
                 InetAddress.getByName(GATEWAY));
 
-            Log.d(TAG, "runServer: creating NetworkInterface");
             networkInterface = new NetworkInterface(netConf);
             log("network interface up: " + LOCAL_IP);
 
-            Log.d(TAG, "runServer: creating ServerSocket");
             serverSocket = new ServerSocket(PORT, 5,
                 InetAddress.getByName(LOCAL_IP));
-            log("listening on " + LOCAL_IP + ":" + PORT);
+            log("SOCKS5 proxy listening on " + LOCAL_IP + ":" + PORT);
 
             sendStatus(true);
 
@@ -103,6 +101,7 @@ public class ProxyService extends Service {
 
     @Override
     public void onDestroy() {
+        log("service stopping...");
         running = false;
         cleanup();
         if (acceptThread != null) {

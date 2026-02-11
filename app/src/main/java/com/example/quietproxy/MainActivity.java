@@ -9,22 +9,28 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
 public class MainActivity extends Activity {
+    private static final String TAG = "MainActivity";
+
     static {
         // Pre-load native libraries on main thread to avoid linker namespace
         // conflict that unloads eglSubDriverAndroid.so on service thread
-        System.loadLibrary("complex");
-        System.loadLibrary("fec");
-        System.loadLibrary("jansson");
-        System.loadLibrary("liquid");
-        System.loadLibrary("quiet");
-        System.loadLibrary("quiet_lwip");
-        System.loadLibrary("quiet-jni");
+        String[] libs = {"complex", "fec", "jansson", "liquid",
+                         "quiet", "quiet_lwip", "quiet-jni"};
+        for (String lib : libs) {
+            try {
+                System.loadLibrary(lib);
+                Log.i("MainActivity", "loaded lib: " + lib);
+            } catch (UnsatisfiedLinkError e) {
+                Log.e("MainActivity", "failed to load lib: " + lib, e);
+            }
+        }
     }
 
     private static final int REQ_AUDIO = 1;
