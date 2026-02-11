@@ -65,6 +65,9 @@ jobs:
           sed -i 's/set(CORE_DEPENDENCIES quiet pthread)/set(CORE_DEPENDENCIES quiet)/' /tmp/quiet-lwip/CMakeLists.txt
           # JNI Android.mk: add SOCKLEN_T_DEFINED to avoid socklen_t redefinition
           sed -i 's/LOCAL_CFLAGS := /LOCAL_CFLAGS := -DSOCKLEN_T_DEFINED -DLWIP_DNS=1 -DLWIP_AUTOIP=1 /' ../org.quietmodem.Quiet/quiet/src/main/jni/Android.mk
+          # JNI Application.mk: set APP_STL to none (pure C code, no C++ runtime needed)
+          # libstdc++.so dependency causes linker namespace conflict that unloads GPU driver
+          echo 'APP_STL := none' >> ../org.quietmodem.Quiet/quiet/src/main/jni/Application.mk
           # quiet-lwip: add missing functions expected by JNI code
           # 1. Rename existing static quiet_lwip_init to quiet_lwip_netif_init (avoid name conflict)
           sed -i 's/static err_t quiet_lwip_init/static err_t quiet_lwip_netif_init/' /tmp/quiet-lwip/src/driver.c
