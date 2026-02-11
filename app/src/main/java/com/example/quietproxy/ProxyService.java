@@ -18,7 +18,7 @@ public class ProxyService extends Service {
     public static final String ACTION_LOG = "com.example.quietproxy.LOG";
     public static final String EXTRA_MSG = "msg";
 
-    private static final String PROFILE = "ultrasonic-experimental";
+    private static final String PROFILE = "cable-64k";
     private static final String LOCAL_IP = "192.168.0.8";
     private static final String NETMASK = "255.255.255.0";
     private static final String GATEWAY = "192.168.0.1";
