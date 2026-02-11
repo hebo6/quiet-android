@@ -94,7 +94,7 @@ jobs:
 
             # 2. jansson -> libjansson.so
             rm -rf /tmp/build-jansson-$ABI && mkdir /tmp/build-jansson-$ABI
-            cmake -S /tmp/jansson -B /tmp/build-jansson-$ABI $CMAKE_COMMON -DJANSSON_BUILD_DOCS=OFF -DJANSSON_EXAMPLES=OFF
+            cmake -S /tmp/jansson -B /tmp/build-jansson-$ABI $CMAKE_COMMON -DJANSSON_BUILD_DOCS=OFF -DJANSSON_EXAMPLES=OFF -DJANSSON_BUILD_SHARED_LIBS=ON
             make -C /tmp/build-jansson-$ABI -j$(nproc)
             make -C /tmp/build-jansson-$ABI install
 
