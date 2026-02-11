@@ -49,11 +49,12 @@ jobs:
         run: |
           # liquid-dsp: fix autoscript target expression for cross-compile
           sed -i 's|\$<TARGET_FILE:autoscript>|${CMAKE_CURRENT_BINARY_DIR}/autoscript|g' /tmp/liquid-dsp/CMakeLists.txt
-          # liquid-dsp: check complex math functions in libcomplex (Android API 21 lacks them in libm)
-          sed -i 's/CHECK_REQUIRED_FUNCTION(cargf m/CHECK_REQUIRED_FUNCTION(cargf complex/' /tmp/liquid-dsp/CMakeLists.txt
-          sed -i 's/CHECK_REQUIRED_FUNCTION(cexpf m/CHECK_REQUIRED_FUNCTION(cexpf complex/' /tmp/liquid-dsp/CMakeLists.txt
-          sed -i 's/CHECK_REQUIRED_FUNCTION(crealf m/CHECK_REQUIRED_FUNCTION(crealf complex/' /tmp/liquid-dsp/CMakeLists.txt
-          sed -i 's/CHECK_REQUIRED_FUNCTION(cimagf m/CHECK_REQUIRED_FUNCTION(cimagf complex/' /tmp/liquid-dsp/CMakeLists.txt
+          # liquid-dsp: skip complex math checks (Android API 21 has them in libcomplex, not libm)
+          # We pre-set the cache vars so CHECK_REQUIRED_FUNCTION skips the try_compile
+          sed -i '/CHECK_REQUIRED_FUNCTION(cargf/d' /tmp/liquid-dsp/CMakeLists.txt
+          sed -i '/CHECK_REQUIRED_FUNCTION(cexpf/d' /tmp/liquid-dsp/CMakeLists.txt
+          sed -i '/CHECK_REQUIRED_FUNCTION(crealf/d' /tmp/liquid-dsp/CMakeLists.txt
+          sed -i '/CHECK_REQUIRED_FUNCTION(cimagf/d' /tmp/liquid-dsp/CMakeLists.txt
           # quiet-lwip: build SHARED instead of STATIC, remove sanitizer flags
           sed -i 's/add_library(quiet_lwip STATIC/add_library(quiet_lwip SHARED/' /tmp/quiet-lwip/CMakeLists.txt
           sed -i 's/-fsanitize=address//g' /tmp/quiet-lwip/CMakeLists.txt
@@ -109,7 +110,7 @@ jobs:
               -DHOST_C_COMPILER=gcc \
               -DLIQUID_BUILD_EXAMPLES=OFF \
               -DLIQUID_BUILD_SANDBOX=OFF \
-              -DCMAKE_SHARED_LINKER_FLAGS="-lcomplex" \
+              -DCMAKE_SHARED_LINKER_FLAGS="-L$PREFIX/lib -lcomplex" \
               $LIQUID_EXTRA
             make -C /tmp/build-liquid-$ABI -j$(nproc)
             make -C /tmp/build-liquid-$ABI install
