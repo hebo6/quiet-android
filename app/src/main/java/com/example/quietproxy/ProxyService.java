@@ -47,22 +47,27 @@ public class ProxyService extends Service {
 
     private void runServer() {
         try {
+            Log.d(TAG, "runServer: creating txConf");
             FrameTransmitterConfig txConf =
                 new FrameTransmitterConfig(this, PROFILE);
             txConf.setSampleRate(SAMPLE_RATE);
+            Log.d(TAG, "runServer: creating rxConf");
             FrameReceiverConfig rxConf =
                 new FrameReceiverConfig(this, PROFILE);
             rxConf.setSampleRate(SAMPLE_RATE);
 
+            Log.d(TAG, "runServer: creating netConf");
             NetworkInterfaceConfig netConf = new NetworkInterfaceConfig(
                 rxConf, txConf,
                 InetAddress.getByName(LOCAL_IP),
                 InetAddress.getByName(NETMASK),
                 InetAddress.getByName(GATEWAY));
 
+            Log.d(TAG, "runServer: creating NetworkInterface");
             networkInterface = new NetworkInterface(netConf);
             log("network interface up: " + LOCAL_IP);
 
+            Log.d(TAG, "runServer: creating ServerSocket");
             serverSocket = new ServerSocket(PORT, 5,
                 InetAddress.getByName(LOCAL_IP));
             log("listening on " + LOCAL_IP + ":" + PORT);
