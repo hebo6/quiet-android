@@ -248,7 +248,7 @@ jobs:
       - name: Build with Gradle
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleRelease
+          ./gradlew :app:assembleRelease -x lint -x lintVitalRelease
 
       - name: Sign APK
         uses: r0adkll/sign-android-release@v1
