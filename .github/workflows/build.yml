@@ -248,10 +248,22 @@ jobs:
       - name: Build with Gradle
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug
+          ./gradlew :app:assembleRelease
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: app/build/outputs/apk
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "26.0.2"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: quiet-android-debug-apk
-          path: app/build/outputs/apk/app-debug.apk
+          name: quiet-android-release-apk
+          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
