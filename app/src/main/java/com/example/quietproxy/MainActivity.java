@@ -15,6 +15,18 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 public class MainActivity extends Activity {
+    static {
+        // Pre-load native libraries on main thread to avoid linker namespace
+        // conflict that unloads eglSubDriverAndroid.so on service thread
+        System.loadLibrary("complex");
+        System.loadLibrary("fec");
+        System.loadLibrary("jansson");
+        System.loadLibrary("liquid");
+        System.loadLibrary("quiet");
+        System.loadLibrary("quiet_lwip");
+        System.loadLibrary("quiet-jni");
+    }
+
     private static final int REQ_AUDIO = 1;
 
     private Button btnToggle;
