@@ -134,7 +134,8 @@ jobs:
               -DCMAKE_C_FLAGS="-std=c11 -O2 -fPIC -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700 -DSOCKLEN_T_DEFINED -Wpedantic -Wall -I$PREFIX/include" \
               -DCMAKE_SHARED_LINKER_FLAGS="-L$PREFIX/lib"
             make -C /tmp/build-lwip-$ABI -j$(nproc)
-            make -C /tmp/build-lwip-$ABI install
+            # quiet-lwip has no install target; copy manually
+            cp /tmp/build-lwip-$ABI/lib/libquiet_lwip.so $PREFIX/lib/
 
             # Copy .so files to JNI prebuilt directory
             JNI_LIB=$JNI_BASE/lib/$ABI
