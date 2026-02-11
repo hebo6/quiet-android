@@ -129,7 +129,7 @@ jobs:
             # 5. quiet-lwip -> libquiet_lwip.so
             rm -rf /tmp/build-lwip-$ABI && mkdir /tmp/build-lwip-$ABI
             cmake -S /tmp/quiet-lwip -B /tmp/build-lwip-$ABI $CMAKE_COMMON \
-              -DCMAKE_C_FLAGS="-std=c11 -O2 -fPIC -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700 -DSOCKLEN_T_DEFINED -Wpedantic -Wall"
+              -DCMAKE_C_FLAGS="-std=c11 -O2 -fPIC -D_DEFAULT_SOURCE -D_XOPEN_SOURCE=700 -DSOCKLEN_T_DEFINED -Wpedantic -Wall -I$PREFIX/include"
             make -C /tmp/build-lwip-$ABI -j$(nproc)
             make -C /tmp/build-lwip-$ABI install
 
