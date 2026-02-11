@@ -124,7 +124,8 @@ jobs:
             rm -rf /tmp/build-quiet-$ABI && mkdir /tmp/build-quiet-$ABI
             cmake -S /tmp/quiet -B /tmp/build-quiet-$ABI $CMAKE_COMMON \
               -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-              -DCMAKE_C_FLAGS="-D_DEFAULT_SOURCE"
+              -DCMAKE_C_FLAGS="-D_DEFAULT_SOURCE" \
+              -DLIQUID_DEVEL_FUNCTIONS=ON
             make -C /tmp/build-quiet-$ABI -j$(nproc)
             make -C /tmp/build-quiet-$ABI install
 
