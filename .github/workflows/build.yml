@@ -66,9 +66,14 @@ jobs:
           # JNI Android.mk: add SOCKLEN_T_DEFINED to avoid socklen_t redefinition
           sed -i 's/LOCAL_CFLAGS := /LOCAL_CFLAGS := -DSOCKLEN_T_DEFINED -DLWIP_DNS=1 -DLWIP_AUTOIP=1 /' ../org.quietmodem.Quiet/quiet/src/main/jni/Android.mk
           # quiet-lwip: add missing functions expected by JNI code
+          # 1. Rename existing static quiet_lwip_init to quiet_lwip_netif_init (avoid name conflict)
+          sed -i 's/static err_t quiet_lwip_init/static err_t quiet_lwip_netif_init/' /tmp/quiet-lwip/src/driver.c
+          sed -i 's/conf, quiet_lwip_init,/conf, quiet_lwip_netif_init,/' /tmp/quiet-lwip/src/driver.c
+          # 2. Append new functions at end of driver.c
           cat >> /tmp/quiet-lwip/src/driver.c << 'PATCH'
 
           #include "lwip/autoip.h"
+          #include <stdbool.h>
           static bool _quiet_lwip_initialized = false;
           void quiet_lwip_init() {
               if (!_quiet_lwip_initialized) {
@@ -88,11 +93,9 @@ jobs:
               (void)interface;
           }
           PATCH
-          # Update quiet_lwip_create to use the shared init flag
-          sed -i 's/static bool has_lwip_init = false;/_quiet_lwip_initialized = true;/' /tmp/quiet-lwip/src/driver.c
+          # 3. Remove the inline tcpip_init in quiet_lwip_create (quiet_lwip_init handles it now)
+          sed -i '/static bool has_lwip_init/d' /tmp/quiet-lwip/src/driver.c
           sed -i '/if (!has_lwip_init)/,/}/d' /tmp/quiet-lwip/src/driver.c
-          # Don't overwrite JNI quiet-lwip.h (it has extra function declarations)
-          sed -i 's|cp /tmp/quiet-lwip/include/quiet-lwip.h|# skip: keep JNI header|' /dev/null 2>/dev/null || true
 
       - name: Cross-compile native libraries
         run: |
