@@ -8,12 +8,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 
-/**
- * Handles a single SOCKS5 connection from the quiet audio network.
- * Protocol: auth negotiation -> connect request -> relay data.
- */
 public class Socks5Handler implements Runnable {
-    private static final String TAG = "Socks5Handler";
+    private static final String TAG = "socks5";
 
     private static final byte SOCKS_VERSION = 5;
     private static final byte AUTH_NOAUTH = 0;
@@ -23,10 +19,21 @@ public class Socks5Handler implements Runnable {
     private static final byte CONN_SUCCEEDED = 0;
     private static final byte CONN_FAILED = 1;
 
-    private final org.quietmodem.Quiet.Socket clientSocket;
+    public interface Logger {
+        void log(String msg);
+    }
 
-    public Socks5Handler(org.quietmodem.Quiet.Socket clientSocket) {
+    private final org.quietmodem.Quiet.Socket clientSocket;
+    private final Logger logger;
+
+    public Socks5Handler(org.quietmodem.Quiet.Socket clientSocket, Logger logger) {
         this.clientSocket = clientSocket;
+        this.logger = logger;
+    }
+
+    private void uiLog(String msg) {
+        Log.i(TAG, msg);
+        if (logger != null) logger.log("[socks5] " + msg);
     }
 
     @Override
@@ -35,8 +42,10 @@ public class Socks5Handler implements Runnable {
             handle();
         } catch (Exception e) {
             Log.e(TAG, "handler error", e);
+            uiLog("error: " + e.getMessage());
         } finally {
             close(clientSocket);
+            uiLog("connection closed");
         }
     }
 
@@ -47,7 +56,10 @@ public class Socks5Handler implements Runnable {
 
         // --- Auth negotiation ---
         int ver = dis.readUnsignedByte();
-        if (ver != SOCKS_VERSION) return;
+        if (ver != SOCKS_VERSION) {
+            uiLog("bad socks version: " + ver);
+            return;
+        }
         int nmethods = dis.readUnsignedByte();
         byte[] methods = new byte[nmethods];
         dis.readFully(methods);
@@ -55,15 +67,22 @@ public class Socks5Handler implements Runnable {
         for (byte m : methods) {
             if (m == AUTH_NOAUTH) { noAuthOk = true; break; }
         }
-        if (!noAuthOk) return;
+        if (!noAuthOk) {
+            uiLog("no acceptable auth method");
+            return;
+        }
         cOut.write(new byte[]{SOCKS_VERSION, AUTH_NOAUTH});
         cOut.flush();
+        uiLog("auth ok");
 
         // --- Connect request ---
         ver = dis.readUnsignedByte();
         if (ver != SOCKS_VERSION) return;
         int cmd = dis.readUnsignedByte();
-        if (cmd != CMD_CONNECT) return;
+        if (cmd != CMD_CONNECT) {
+            uiLog("unsupported cmd: " + cmd);
+            return;
+        }
         dis.readUnsignedByte(); // reserved
         int addrType = dis.readUnsignedByte();
 
@@ -79,11 +98,12 @@ public class Socks5Handler implements Runnable {
             dis.readFully(domain);
             host = new String(domain, "UTF-8");
         } else {
+            uiLog("unsupported addr type: " + addrType);
             return;
         }
         int port = dis.readUnsignedShort();
 
-        Log.i(TAG, "connecting to " + host + ":" + port);
+        uiLog("connecting to " + host + ":" + port);
 
         // --- Connect to remote via native socket ---
         Socket remoteSocket;
@@ -91,11 +111,13 @@ public class Socks5Handler implements Runnable {
             remoteSocket = new Socket(host, port);
         } catch (IOException e) {
             Log.e(TAG, "connect failed: " + host + ":" + port, e);
+            uiLog("connect failed: " + host + ":" + port + " (" + e.getMessage() + ")");
             sendReply(cOut, CONN_FAILED);
             return;
         }
 
         sendReply(cOut, CONN_SUCCEEDED);
+        uiLog("connected to " + host + ":" + port + ", relaying...");
 
         // --- Relay data bidirectionally ---
         relay(clientSocket, remoteSocket);

@@ -14,7 +14,7 @@ import org.quietmodem.Quiet.ServerSocket;
 import org.quietmodem.Quiet.Socket;
 
 public class ProxyService extends Service {
-    private static final String TAG = "ProxyService";
+    private static final String TAG = "proxy";
     public static final String ACTION_LOG = "com.example.quietproxy.LOG";
     public static final String EXTRA_MSG = "msg";
 
@@ -72,10 +72,13 @@ public class ProxyService extends Service {
 
             sendStatus(true);
 
+            int connCount = 0;
             while (running) {
                 Socket client = serverSocket.accept();
-                log("accepted connection");
-                new Thread(new Socks5Handler(client), "socks5").start();
+                connCount++;
+                log("accepted connection #" + connCount);
+                new Thread(new Socks5Handler(client, socks5Logger),
+                    "socks5-" + connCount).start();
             }
         } catch (Exception e) {
             if (running) {
@@ -118,9 +121,19 @@ public class ProxyService extends Service {
     private void log(String msg) {
         Log.i(TAG, msg);
         Intent i = new Intent(ACTION_LOG);
-        i.putExtra(EXTRA_MSG, msg);
+        i.putExtra(EXTRA_MSG, "[proxy] " + msg);
         sendBroadcast(i);
     }
+
+    private final Socks5Handler.Logger socks5Logger = new Socks5Handler.Logger() {
+        @Override
+        public void log(String msg) {
+            Log.i("socks5", msg);
+            Intent i = new Intent(ACTION_LOG);
+            i.putExtra(EXTRA_MSG, msg);
+            sendBroadcast(i);
+        }
+    };
 
     private void sendStatus(boolean isRunning) {
         Intent i = new Intent(ACTION_LOG);
