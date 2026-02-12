@@ -35,7 +35,8 @@ public class ProxyService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (running) return START_NOT_STICKY;
+        if (running)
+            return START_NOT_STICKY;
         running = true;
         log("service starting...");
         acceptThread = new Thread(new Runnable() {
@@ -51,25 +52,28 @@ public class ProxyService extends Service {
     private void runServer() {
         try {
             log("initializing audio modem (profile: " + PROFILE + ")");
-            FrameTransmitterConfig txConf =
-                new FrameTransmitterConfig(this, PROFILE);
+            FrameTransmitterConfig txConf = new FrameTransmitterConfig(this, PROFILE);
             txConf.setSampleRate(SAMPLE_RATE);
-            FrameReceiverConfig rxConf =
-                new FrameReceiverConfig(this, PROFILE);
+            FrameReceiverConfig rxConf = new FrameReceiverConfig(this, PROFILE);
             rxConf.setSampleRate(SAMPLE_RATE);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                rxConf.setRecordingPreset(9); // UNPROCESSED
+            } else {
+                rxConf.setRecordingPreset(6); // VOICE_RECOGNITION
+            }
 
             log("creating network interface...");
             NetworkInterfaceConfig netConf = new NetworkInterfaceConfig(
-                rxConf, txConf,
-                InetAddress.getByName(LOCAL_IP),
-                InetAddress.getByName(NETMASK),
-                InetAddress.getByName(GATEWAY));
+                    rxConf, txConf,
+                    InetAddress.getByName(LOCAL_IP),
+                    InetAddress.getByName(NETMASK),
+                    InetAddress.getByName(GATEWAY));
 
             networkInterface = new NetworkInterface(netConf);
             log("network interface up: " + LOCAL_IP);
 
             serverSocket = new ServerSocket(PORT, 5,
-                InetAddress.getByName(LOCAL_IP));
+                    InetAddress.getByName(LOCAL_IP));
             log("SOCKS5 proxy listening on " + LOCAL_IP + ":" + PORT);
 
             sendStatus(true);
@@ -88,7 +92,7 @@ public class ProxyService extends Service {
                 connCount++;
                 log("accepted connection #" + connCount);
                 new Thread(new Socks5Handler(client, socks5Logger),
-                    "socks5-" + connCount).start();
+                        "socks5-" + connCount).start();
             }
         } catch (Exception e) {
             if (running) {
@@ -106,7 +110,11 @@ public class ProxyService extends Service {
     private void monitorFrames() {
         int lastCount = BaseNetworkInterface.nativeGetRecvCount();
         while (running) {
-            try { Thread.sleep(500); } catch (InterruptedException e) { break; }
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                break;
+            }
             int count = BaseNetworkInterface.nativeGetRecvCount();
             if (count != lastCount) {
                 int delta = count - lastCount;
@@ -118,10 +126,16 @@ public class ProxyService extends Service {
 
     private void cleanup() {
         if (serverSocket != null) {
-            try { serverSocket.close(); } catch (Exception ignored) {}
+            try {
+                serverSocket.close();
+            } catch (Exception ignored) {
+            }
         }
         if (networkInterface != null) {
-            try { networkInterface.close(); } catch (Exception ignored) {}
+            try {
+                networkInterface.close();
+            } catch (Exception ignored) {
+            }
         }
     }
 
