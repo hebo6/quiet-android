@@ -41,21 +41,17 @@ jobs:
           JNI=$(cd ../org.quietmodem.Quiet/quiet/src/main/jni && pwd)
           LIB=$JNI/lib/$ABI
           INC=$JNI/include/$ABI
-          mkdir -p $LIB $INC/liquid $INC/quiet-lwip
+          mkdir -p $LIB $INC/quiet-lwip
 
+          # libquiet bundles jansson/fec/libcorrect statically; only libquiet and
+          # libliquid are published as shared libs.
           curl -fsSL -o /tmp/quiet-android.zip \
             https://github.com/hebo6/quiet/releases/latest/download/quiet-android-$ABI.zip
           unzip -q /tmp/quiet-android.zip -d /tmp/
           Q=/tmp/quiet-android-$ABI
-          cp $Q/lib/libquiet.so   $LIB/
-          cp $Q/lib/libliquid.so  $LIB/
-          cp $Q/lib/libjansson.so $LIB/
-          cp $Q/lib/libfec.so     $LIB/
-          cp $Q/include/quiet.h           $INC/
-          cp $Q/include/liquid/liquid.h   $INC/liquid/
-          cp $Q/include/jansson.h         $INC/
-          cp $Q/include/jansson_config.h  $INC/
-          cp $Q/include/fec.h             $INC/
+          cp $Q/lib/libquiet.so  $LIB/
+          cp $Q/lib/libliquid.so $LIB/
+          cp $Q/include/quiet.h  $INC/
 
           curl -fsSL -o /tmp/quiet-lwip-android.zip \
             https://github.com/hebo6/quiet-lwip/releases/latest/download/quiet-lwip-android-$ABI.zip
@@ -71,6 +67,10 @@ jobs:
           JNI=../org.quietmodem.Quiet/quiet/src/main/jni
           # Android.mk: avoid socklen_t redefinition and enable lwip DNS/AutoIP
           sed -i 's|LOCAL_CFLAGS := |LOCAL_CFLAGS := -DSOCKLEN_T_DEFINED -DLWIP_DNS=1 -DLWIP_AUTOIP=1 |' $JNI/Android.mk
+          # Android.mk: remove fec/jansson prebuilt modules (statically linked into libquiet.so)
+          sed -i '/LOCAL_MODULE := fec-prebuilt/,/include $(PREBUILT_SHARED_LIBRARY)/d' $JNI/Android.mk
+          sed -i '/LOCAL_MODULE := jansson-prebuilt/,/include $(PREBUILT_SHARED_LIBRARY)/d' $JNI/Android.mk
+          sed -i 's/ fec-prebuilt jansson-prebuilt//' $JNI/Android.mk
           # Application.mk: only build arm64-v8a; match libquiet.so's android-24 baseline;
           # disable C++ STL (pure C code; libstdc++.so causes linker namespace conflict)
           sed -i 's|^APP_ABI.*|APP_ABI := arm64-v8a|' $JNI/Application.mk
