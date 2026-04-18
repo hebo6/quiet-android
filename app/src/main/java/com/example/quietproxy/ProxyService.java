@@ -5,7 +5,6 @@ import android.content.Intent;
 import android.os.IBinder;
 import android.util.Log;
 
-import org.quietmodem.Quiet.BaseNetworkInterface;
 import org.quietmodem.Quiet.FrameReceiverConfig;
 import org.quietmodem.Quiet.FrameTransmitterConfig;
 import org.quietmodem.Quiet.InetAddress;
@@ -31,7 +30,6 @@ public class ProxyService extends Service {
     private NetworkInterface networkInterface;
     private ServerSocket serverSocket;
     private Thread acceptThread;
-    private Thread frameMonitorThread;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -78,14 +76,6 @@ public class ProxyService extends Service {
 
             sendStatus(true);
 
-            frameMonitorThread = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    monitorFrames();
-                }
-            }, "frame-monitor");
-            frameMonitorThread.start();
-
             int connCount = 0;
             while (running) {
                 Socket client = serverSocket.accept();
@@ -104,23 +94,6 @@ public class ProxyService extends Service {
             cleanup();
             sendStatus(false);
             stopSelf();
-        }
-    }
-
-    private void monitorFrames() {
-        int lastCount = BaseNetworkInterface.nativeGetRecvCount();
-        while (running) {
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                break;
-            }
-            int count = BaseNetworkInterface.nativeGetRecvCount();
-            if (count != lastCount) {
-                int delta = count - lastCount;
-                log("recv " + delta + " frame(s), total=" + count);
-                lastCount = count;
-            }
         }
     }
 
